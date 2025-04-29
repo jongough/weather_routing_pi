@@ -17,6 +17,9 @@
  *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
  ***************************************************************************/
 
+#ifndef _WEATHER_ROUTING_BOAT_H
+#define _WEATHER_ROUTING_BOAT_H
+
 #include "Polar.h"
 
 /*
@@ -159,3 +162,5 @@ private:
   wxString m_last_filename;
   wxDateTime m_last_filetime;
 };
+
+#endif  // _WEATHER_ROUTING_BOAT_H

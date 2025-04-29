@@ -23,8 +23,8 @@
  ***************************************************************************
  */
 
-#ifndef _BOAT_DIALOG_H_
-#define _BOAT_DIALOG_H_
+#ifndef _WEATHER_ROUTING_BOAT_DIALOG_H_
+#define _WEATHER_ROUTING_BOAT_DIALOG_H_
 
 #include <wx/fileconf.h>
 

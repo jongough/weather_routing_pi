@@ -188,6 +188,7 @@ SET(SRCS
             src/Boat.cpp
             src/RouteMap.cpp
             src/RouteMapOverlay.cpp
+            src/RouteSimplifier.cpp
             src/RoutingTablePanel.cpp
             src/Utilities.cpp
             src/LineBufferOverlay.cpp
@@ -218,6 +219,7 @@ SET (HDRS
             include/Boat.h
             include/RouteMap.h
             include/RouteMapOverlay.h
+            include/RouteSimplifier.h
             include/RoutingTablePanel.h
             include/Utilities.h
             include/LineBufferOverlay.h

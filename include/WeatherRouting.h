@@ -417,6 +417,11 @@ private:
   void OnClose(wxCloseEvent& event) { Hide(); }
   void OnPositionKeyDown(wxListEvent& event);
   void OnEditConfiguration();
+
+  void OnSimplifyRoute(wxCommandEvent& event);
+  void SaveSimplifiedRoute(RouteMapOverlay& routemapoverlay,
+                           const std::list<Position*>& simplifiedRoute);
+
   /**
    * Loads a weather routing configuration from an XML file.
    *

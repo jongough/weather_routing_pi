@@ -17,6 +17,9 @@
  *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
  ***************************************************************************/
 
+#ifndef _WEATHER_ROUTING_ROUTE_MAP_OVERLAY_H_
+#define _WEATHER_ROUTING_ROUTE_MAP_OVERLAY_H_
+
 #include "RouteMap.h"
 #include "LineBufferOverlay.h"
 
@@ -230,10 +233,21 @@ public:
   int Cyclones(int* months);
 
   /**
-   * Gets the destination position.
+   * Gets the destination position, or null if the route could not be completed
+   * successfully.
    * @return Pointer to the destination position.
    */
   Position* GetDestination() { return destination_position; }
+  /**
+   * Gets the best achievable position.
+   *
+   * This is either:
+   * 1. The exact destination position (destination_position) if reached
+   * successfully.
+   * 2. The closest calculated position to the destination if exact arrival
+   * isn't possible.
+   */
+  Position* GetLastDestination() { return last_destination_position; }
 
   /**
    * Checks if the route has been updated.
@@ -475,7 +489,8 @@ private:
   Position* destination_position;
 
   /**
-   * Best position reached toward the destination during route calculation.
+   * Best achievable position reached toward the destination during route
+   * calculation.
    *
    * This stores either:
    * 1. The exact destination position (destination_position) if reached
@@ -561,3 +576,5 @@ private:
   /** Projection type for the current cache. */
   int current_cache_projection;
 };
+
+#endif

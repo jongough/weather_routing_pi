@@ -37,6 +37,7 @@
 #include "RouteMapOverlay.h"
 #include "weather_routing_pi.h"
 #include "WeatherRouting.h"
+#include "RouteSimplifier.h"
 #include "AboutDialog.h"
 #include "icons.h"
 #include "navobj_util.h"
@@ -2276,6 +2277,7 @@ void WeatherRouting::SetEnableConfigurationMenu() {
   m_mSaveAsTrack->Enable(current);
   m_mSaveAsRoute->Enable(current);
   m_mExportRouteAsGPX->Enable(current);
+  m_mSimplifyRoute->Enable(current);
   m_panel->m_bSaveAsTrack->Enable(current);
   m_panel->m_bSaveAsRoute->Enable(current);
 
@@ -3362,4 +3364,190 @@ RouteMapConfiguration WeatherRouting::DefaultConfiguration() {
   configuration.ByDegrees = 5;
 
   return configuration;
+}
+
+void WeatherRouting::OnSimplifyRoute(wxCommandEvent& event) {
+  std::list<RouteMapOverlay*> currentRoutes = CurrentRouteMaps(true);
+  if (currentRoutes.empty()) {
+    wxMessageDialog mdlg(this, _("No route selected"), _("Weather Routing"),
+                         wxOK | wxICON_ERROR);
+    mdlg.ShowModal();
+    return;
+  }
+
+  // Simple dialog for now - we'll create a more sophisticated one later
+  wxDialog dlg(this, wxID_ANY, _("Simplify Route"), wxDefaultPosition,
+               wxDefaultSize);
+  wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
+
+  // Add time penalty control
+  wxStaticText* timePenaltyLabel =
+      new wxStaticText(&dlg, wxID_ANY, _("Maximum Performance Loss (%)"));
+  mainSizer->Add(timePenaltyLabel, 0, wxALL | wxEXPAND, 5);
+
+  wxSlider* sliderTimePenalty =
+      new wxSlider(&dlg, wxID_ANY, 5, 0, 20, wxDefaultPosition, wxDefaultSize,
+                   wxSL_HORIZONTAL | wxSL_LABELS);
+  mainSizer->Add(sliderTimePenalty, 0, wxALL | wxEXPAND, 5);
+
+  // Add waypoint limit control
+  wxCheckBox* cbLimitWaypoints =
+      new wxCheckBox(&dlg, wxID_ANY, _("Limit maximum waypoints"));
+  mainSizer->Add(cbLimitWaypoints, 0, wxALL, 5);
+
+  wxBoxSizer* waypointSizer = new wxBoxSizer(wxHORIZONTAL);
+  wxStaticText* waypointLabel =
+      new wxStaticText(&dlg, wxID_ANY, _("Maximum waypoints:"));
+  waypointSizer->Add(waypointLabel, 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
+
+  wxSpinCtrl* spinMaxWaypoints =
+      new wxSpinCtrl(&dlg, wxID_ANY, "20", wxDefaultPosition, wxDefaultSize,
+                     wxSP_ARROW_KEYS, 5, 100, 20);
+  waypointSizer->Add(spinMaxWaypoints, 0, wxALL, 5);
+
+  mainSizer->Add(waypointSizer, 0, wxALL, 5);
+
+  // Enable/disable spin control based on checkbox
+  spinMaxWaypoints->Enable(false);
+  cbLimitWaypoints->Bind(
+      wxEVT_CHECKBOX, [spinMaxWaypoints, cbLimitWaypoints](wxCommandEvent&) {
+        spinMaxWaypoints->Enable(cbLimitWaypoints->GetValue());
+      });
+
+  // Add buttons
+  wxStdDialogButtonSizer* buttonSizer = new wxStdDialogButtonSizer();
+  buttonSizer->AddButton(new wxButton(&dlg, wxID_OK, _("Simplify")));
+  buttonSizer->AddButton(new wxButton(&dlg, wxID_CANCEL));
+  buttonSizer->Realize();
+
+  mainSizer->Add(buttonSizer, 0, wxALL | wxEXPAND, 10);
+
+  dlg.SetSizer(mainSizer);
+  mainSizer->Fit(&dlg);
+  dlg.Centre();
+
+  if (dlg.ShowModal() != wxID_OK) return;
+
+  // Get parameters from dialog
+  double maxTimePenalty = sliderTimePenalty->GetValue();
+  int maxWaypoints =
+      cbLimitWaypoints->GetValue() ? spinMaxWaypoints->GetValue() : 0;
+
+  // Get the first selected route
+  RouteMapOverlay* routemap = currentRoutes.front();
+
+  // Create and run simplifier
+  RouteSimplifier simplifier(routemap);
+
+  wxProgressDialog progress(_("Simplifying Route"), _("Processing..."), 100,
+                            this, wxPD_APP_MODAL | wxPD_AUTO_HIDE);
+  progress.Update(50);
+
+  if (!simplifier.SimplifyRoute(maxTimePenalty, maxWaypoints)) {
+    wxMessageDialog mdlg(this, _("Failed to simplify route"),
+                         _("Weather Routing"), wxOK | wxICON_ERROR);
+    mdlg.ShowModal();
+    return;
+  }
+
+  progress.Update(100);
+
+  // Get the simplified route
+  std::list<Position*> simplifiedRoute = simplifier.GetSimplifiedRoute();
+
+  // Calculate and show statistics
+  int originalPoints = simplifier.GetOriginalPointCount();
+  int simplifiedPoints = simplifier.GetSimplifiedPointCount();
+  double timePenalty = simplifier.GetTimePenalty();
+
+  wxString message = wxString::Format(
+      _("Route successfully simplified.\n\nOriginal waypoints: %d\nSimplified "
+        "waypoints: %d\nReduction: %.1f%%\nPerformance loss: %.1f%%"),
+      originalPoints, simplifiedPoints,
+      (1.0 - (double)simplifiedPoints / originalPoints) * 100.0, timePenalty);
+
+  wxMessageDialog resultDlg(this, message, _("Route Simplification"),
+                            wxOK | wxYES_NO | wxICON_INFORMATION,
+                            wxDefaultPosition);
+  resultDlg.SetYesNoLabels(_("Create Route"), _("Cancel"));
+
+  if (resultDlg.ShowModal() == wxID_YES) {
+    // Save the simplified route
+    SaveSimplifiedRoute(*routemap, simplifiedRoute);
+  }
+}
+
+void WeatherRouting::SaveSimplifiedRoute(
+    RouteMapOverlay& routemapoverlay,
+    const std::list<Position*>& simplifiedRoute) {
+  if (simplifiedRoute.empty()) return;
+
+  // Create a new OpenCPN route
+  PlugIn_Route* newRoute = new PlugIn_Route();
+
+  // Set route name
+  RouteMapConfiguration config = routemapoverlay.GetConfiguration();
+  wxString name = wxString::Format(_T("Simplified %s to %s"),
+                                   config.Start.c_str(), config.End.c_str());
+  newRoute->m_NameString = name;
+  newRoute->m_GUID =
+      wxString::Format(_T("%i"), (int)GetRandomNumber(1, 4000000));
+
+  // Add waypoints
+  for (Position* pos : simplifiedRoute) {
+    PlugIn_Waypoint* waypoint = new PlugIn_Waypoint();
+    waypoint->m_lat = pos->lat;
+    waypoint->m_lon = pos->lon;
+    waypoint->m_GUID =
+        wxString::Format(_T("%i"), (int)GetRandomNumber(1, 4000000));
+    waypoint->m_IconName = _T("circle");
+    waypoint->m_MarkName =
+        wxString::Format(_T("WP%03d"), newRoute->pWaypointList->GetCount() + 1);
+
+    // Try to add time information if available
+    std::list<PlotData> plotData = routemapoverlay.GetPlotData(false);
+    if (!plotData.empty()) {
+      // Find the closest plot data point to this position
+      PlotData* closestData = nullptr;
+      double minDistance = INFINITY;
+
+      for (auto& data : plotData) {
+        double dist =
+            DistGreatCircle_Plugin(pos->lat, pos->lon, data.lat, data.lon);
+        if (dist < minDistance) {
+          minDistance = dist;
+          closestData = &data;
+        }
+      }
+
+      if (closestData && minDistance < 0.1) {  // Within 0.1 nm
+        // Add time information to waypoint description
+        wxDateTime time = closestData->time;
+        if (m_SettingsDialog.m_cbUseLocalTime->GetValue())
+          time = time.FromUTC();
+
+        waypoint->m_MarkDescription = time.Format(_T("%x %H:%M"));
+
+        // Optionally add other information (wind, etc.)
+        waypoint->m_MarkDescription += wxString::Format(
+            _T("\nWind: %.1f kts at %.0f°"), closestData->twsOverWater,
+            closestData->twdOverWater);
+
+        waypoint->m_MarkDescription +=
+            wxString::Format(_T("\nBoat: %.1f kts at %.0f°"), closestData->stw,
+                             closestData->ctw);
+      }
+    }
+
+    // Add to route
+    newRoute->pWaypointList->Append(waypoint);
+  }
+
+  // Add route to OpenCPN
+  AddPlugInRoute(newRoute);
+  RequestRefresh(GetParent());
+
+  wxMessageDialog mdlg(this, _("Route simplified and saved"),
+                       _("Weather Routing"), wxOK);
+  mdlg.ShowModal();
 }

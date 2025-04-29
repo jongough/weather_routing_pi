@@ -159,6 +159,12 @@ WeatherRoutingBase::WeatherRoutingBase(wxWindow* parent, wxWindowID id,
       wxEmptyString, wxITEM_NORMAL);
   m_mConfiguration->Append(m_mExportRouteAsGPX);
 
+  /** Menu item to simplify a route. */
+  m_mSimplifyRoute =
+      new wxMenuItem(m_mConfiguration, wxID_ANY, wxString(_("Simplify Route")),
+                     wxEmptyString, wxITEM_NORMAL);
+  m_mConfiguration->Append(m_mSimplifyRoute);
+
   m_mConfiguration->AppendSeparator();
 
   wxMenuItem* m_mFilter;
@@ -413,6 +419,11 @@ WeatherRoutingBase::WeatherRoutingBase(wxWindow* parent, wxWindowID id,
   m_mConfiguration->Bind(wxEVT_COMMAND_MENU_SELECTED,
                          wxCommandEventHandler(WeatherRoutingBase::OnFilter),
                          this, m_mFilter->GetId());
+  m_mConfiguration->Bind(
+      wxEVT_COMMAND_MENU_SELECTED,
+      wxCommandEventHandler(WeatherRoutingBase::OnSimplifyRoute), this,
+      m_mSimplifyRoute->GetId());
+
   m_mView->Bind(wxEVT_COMMAND_MENU_SELECTED,
                 wxCommandEventHandler(WeatherRoutingBase::OnSettings), this,
                 m_mSettings->GetId());

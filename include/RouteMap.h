@@ -17,6 +17,9 @@
  *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
  ***************************************************************************/
 
+#ifndef _WEATHER_ROUTING_ROUTE_MAP_H_
+#define _WEATHER_ROUTING_ROUTE_MAP_H_
+
 #include "wx/datetime.h"
 #include <wx/object.h>
 #include <wx/weakref.h>
@@ -467,8 +470,19 @@ public:
    */
   double parent_bearing;
 
-  Position* parent;      /* previous position in time */
-  Position *prev, *next; /* doubly linked circular list of positions */
+  /**
+   * The position we came from (temporal/routing relationship).
+   * This creates a backward chain from destination to start.
+   * Used to trace back the optimal route after computation.
+   */
+  Position* parent;
+  /**
+   * Pointers for a circular doubly-linked list of positions within an IsoRoute.
+   *
+   * These pointers connect positions that can all be reached at the same time
+   * from the starting point, forming the boundary of an isochrone.
+   */
+  Position *prev, *next;
 
   bool propagated;
   bool drawn, copied;
@@ -1917,3 +1931,5 @@ private:
 
   wxDateTime m_NewTime;
 };
+
+#endif  // _ROUTEMAP_H_
